@@ -2,6 +2,7 @@ package app
 
 import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSystem
+import akka.actor.ActorRef
 import akka.actor.Props
 
 import pl.project13.scala.akka.raft._
@@ -21,6 +22,7 @@ object ApplicationMain {
 
     def startup(ports: Seq[String]): Unit = {
 
+        var client: Option[ActorRef] = None;
         val members = ports.map { port =>
             // Override the configuration of the port
             val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").withFallback(ConfigFactory.load())
@@ -29,21 +31,21 @@ object ApplicationMain {
             // Create an actor that handles cluster domain events
             val actor = system.actorOf(Props[ClusterListener], name = s"raft-member-$port")
             val clusterActor = system.actorOf(ClusterRaftActor.props(actor, 3))
+            def raftMembersPath = system / "raft-member-*"
+            if(client == None) {
+                client = Some(system.actorOf(RaftClientActor.props(raftMembersPath), "raft-client"))
+            }
             clusterActor
         }
         val raftConfiguration: ClusterConfiguration = ClusterConfiguration(members)
         members foreach { _ ! ChangeConfiguration(raftConfiguration) }
-        //clusterActor ! ChangeConfiguration(raftConfiguration)
 
         val executor = Executors.newSingleThreadScheduledExecutor()
-        val system = ActorSystem("RaftSystem")
-        def raftMembersPath = system / "raft-member-*"
-        val client = system.actorOf(RaftClientActor.props(raftMembersPath), "raft-client")
-
         executor.scheduleAtFixedRate(new Runnable {
           def run() {
-            client ! Broadcast("Are you alive?")
+            client.foreach(_ ! Broadcast("Are you alive?"))
           }
-        },1,5,TimeUnit.SECONDS)
+        },10,60,TimeUnit.SECONDS)
+
     }
 }
