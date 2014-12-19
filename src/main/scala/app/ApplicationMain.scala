@@ -37,15 +37,17 @@ object ApplicationMain {
             }
             clusterActor
         }
-        val raftConfiguration: ClusterConfiguration = ClusterConfiguration(members)
-        members foreach { _ ! ChangeConfiguration(raftConfiguration) }
+        if(ports.length > 1) {
+            val raftConfiguration: ClusterConfiguration = ClusterConfiguration(members)
+            members foreach { _ ! ChangeConfiguration(raftConfiguration) }
+        }
 
         val executor = Executors.newSingleThreadScheduledExecutor()
         executor.scheduleAtFixedRate(new Runnable {
           def run() {
             client.foreach(_ ! Broadcast("Are you alive?"))
           }
-        },10,60,TimeUnit.SECONDS)
+        },10,15,TimeUnit.SECONDS)
 
     }
 }
