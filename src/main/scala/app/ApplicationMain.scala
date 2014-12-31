@@ -35,6 +35,5 @@ object ApplicationMain {
         val system = ActorSystem("RaftSystem", config)
         val kvStore = system.actorOf(Props[KvStore], name = s"raft-member-$port")
         val clusterActor = system.actorOf(ClusterRaftActor.props(kvStore, 3))
-        //val clustList = system.actorOf(ClusterListener.props(kvStore), name = "cluster-listener")
     }
 }
