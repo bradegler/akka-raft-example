@@ -4,6 +4,12 @@ import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Props
+import akka.pattern.ask
+import akka.util.Timeout
+
+import scala.concurrent.Await
+import scala.concurrent.duration.DurationInt
+import scala.language.postfixOps
 
 import pl.project13.scala.akka.raft._
 import pl.project13.scala.akka.raft.protocol._
@@ -13,41 +19,22 @@ import java.util.concurrent._
 
 object ApplicationMain {
 
+    implicit val timeout = Timeout(10 seconds)
+
     def main(args: Array[String]): Unit = {
-        if (args.isEmpty)
-            startup(Seq("2551", "2552", "2553"))
-        else
-            startup(args)
+        if (args.isEmpty) {
+            Seq("2551","2552","2553").foreach(startup(_))
+        }
+        else {
+            startup(args(0))
+        }
     }
 
-    def startup(ports: Seq[String]): Unit = {
-
-        var client: Option[ActorRef] = None;
-        val members = ports.map { port =>
-            // Override the configuration of the port
-            val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").withFallback(ConfigFactory.load())
-            // Create an Akka system
-            val system = ActorSystem("RaftSystem", config)
-            // Create an actor that handles cluster domain events
-            val actor = system.actorOf(Props[ClusterListener], name = s"raft-member-$port")
-            val clusterActor = system.actorOf(ClusterRaftActor.props(actor, 3))
-            def raftMembersPath = system / "raft-member-*"
-            if(client == None) {
-                client = Some(system.actorOf(RaftClientActor.props(raftMembersPath), "raft-client"))
-            }
-            clusterActor
-        }
-        if(ports.length > 1) {
-            val raftConfiguration: ClusterConfiguration = ClusterConfiguration(members)
-            members foreach { _ ! ChangeConfiguration(raftConfiguration) }
-        }
-
-        val executor = Executors.newSingleThreadScheduledExecutor()
-        executor.scheduleAtFixedRate(new Runnable {
-          def run() {
-            client.foreach(_ ! Broadcast("Are you alive?"))
-          }
-        },10,15,TimeUnit.SECONDS)
-
+    def startup(port: String): Unit = {
+        val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").withFallback(ConfigFactory.load())
+        val system = ActorSystem("RaftSystem", config)
+        val kvStore = system.actorOf(Props[KvStore], name = s"raft-member-$port")
+        val clusterActor = system.actorOf(ClusterRaftActor.props(kvStore, 3))
+        //val clustList = system.actorOf(ClusterListener.props(kvStore), name = "cluster-listener")
     }
 }
