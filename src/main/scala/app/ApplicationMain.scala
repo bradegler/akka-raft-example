@@ -33,7 +33,7 @@ object ApplicationMain {
     def startup(port: String): Unit = {
         val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").withFallback(ConfigFactory.load())
         val system = ActorSystem("RaftSystem", config)
-        val kvStore = system.actorOf(Props[KvStore], name = s"raft-member-$port")
-        val clusterActor = system.actorOf(ClusterRaftActor.props(kvStore, 3))
+        val kvStore = system.actorOf(Props[KvStore], name = s"impl-raft-member-$port")
+        val clusterActor = system.actorOf(ClusterRaftActor.props(kvStore, 3), s"raft-member-$port")
     }
 }
